@@ -148,13 +148,13 @@ public class FlutterBranchSdkPlugin implements FlutterPlugin, MethodCallHandler,
     public void onListen(Object o, EventChannel.EventSink eventSink) {
         LogUtils.debug(DEBUG_NAME, "triggered onListen");
         this.eventSink = new MainThreadEventSink(eventSink);
-        if (sessionParams != null) {
+		
+        if(sessionParams != null) {
             eventSink.success(sessionParams);
             sessionParams = null;
             initialError = null;
         } else if (initialError != null) {
             eventSink.error(String.valueOf(initialError.getErrorCode()), initialError.getMessage(), null);
-            sessionParams = null;
             initialError = null;
         }
     }
@@ -353,13 +353,17 @@ public class FlutterBranchSdkPlugin implements FlutterPlugin, MethodCallHandler,
                     LogUtils.debug(DEBUG_NAME, "triggered onInitFinished");
                     if (error == null) {
                         LogUtils.debug(DEBUG_NAME, "BranchReferralInitListener - params: " + params.toString());
-                        try {
-                            sessionParams = branchSdkHelper.paramsToMap(params);
-                        } catch (JSONException e) {
-                            LogUtils.debug(DEBUG_NAME, "BranchReferralInitListener - error to Map: " + e.getLocalizedMessage());
-                            return;
+
+                        if(sessionParams == null) {
+                            try {
+                                sessionParams = branchSdkHelper.paramsToMap(params);
+                            } catch (JSONException e) {
+                                LogUtils.debug(DEBUG_NAME, "BranchReferralInitListener - error to Map: " + e.getLocalizedMessage());
+                            }
                         }
-                        if (eventSink != null) {
+
+
+                        if (eventSink != null && sessionParams != null) {
                             eventSink.success(sessionParams);
                             sessionParams = null;
                         }
@@ -455,6 +459,15 @@ public class FlutterBranchSdkPlugin implements FlutterPlugin, MethodCallHandler,
             initialIntent.setAction(Intent.ACTION_MAIN);
             initialIntent.addCategory(Intent.CATEGORY_LAUNCHER);
         }
+		// This will solve the issue when app is opened through Intercom push notification - to avoid recreating the app infinitely
+		// Dart code should just listen on empty map additionally
+		else if ((initialIntent.getFlags() & Intent.FLAG_ACTIVITY_CLEAR_TASK) != 0) {
+            initialIntent = null;
+            sessionParams = new HashMap<>();
+            result.success(Boolean.TRUE);
+            return;
+        }
+		
         initialIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         initialIntent.putExtra("branch_force_new_session", true);
         this.context.startActivity(initialIntent);
